@@ -1,4 +1,4 @@
-package main
+package timerecord
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ type TimeRecord struct {
 	mode string
 }
 
-func NewTimeRecorder(path string) *TimeRecord {
+func New(path string) *TimeRecord {
 	return &TimeRecord{
 		path: path,
 		mode: TimeRecordModeUnset,

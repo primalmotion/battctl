@@ -1,4 +1,4 @@
-package main
+package monitor
 
 import (
 	"context"
@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/pilebones/go-udev/netlink"
+	"github.com/primalmotion/battctl/internal/threshold"
+	"github.com/primalmotion/battctl/internal/timerecord"
 )
 
 const (
@@ -33,14 +35,14 @@ var matcher = &netlink.RuleDefinitions{
 }
 
 type Monitor struct {
-	tr          *TimeRecord
+	tr          *timerecord.TimeRecord
 	dockedDelay time.Duration
-	docked      Threshold
+	docked      threshold.Threshold
 	mobileDelay time.Duration
-	mobile      Threshold
+	mobile      threshold.Threshold
 }
 
-func NewMonitor(tr *TimeRecord, dockedDelay time.Duration, docked Threshold, mobileDelay time.Duration, mobile Threshold) *Monitor {
+func NewMonitor(tr *timerecord.TimeRecord, dockedDelay time.Duration, docked threshold.Threshold, mobileDelay time.Duration, mobile threshold.Threshold) *Monitor {
 
 	return &Monitor{
 		tr:          tr,
@@ -109,7 +111,7 @@ func (m *Monitor) Run(ctx context.Context) error {
 			fmt.Println("restoring: ac=online mode=docked: scheduling docked in", remaining)
 		}
 
-	case TimeRecordModeUnset:
+	case timerecord.TimeRecordModeUnset:
 		if acOnline {
 			dockedTimer.Reset(0)
 			m.tr.Record("docked")
@@ -146,13 +148,13 @@ func (m *Monitor) Run(ctx context.Context) error {
 			}
 
 		case <-dockedTimer.C:
-			if err := SetThreshold(m.docked); err != nil {
+			if err := threshold.SetThreshold(m.docked); err != nil {
 				return err
 			}
 			fmt.Printf("enabled mode: docked (%s)\n", m.docked)
 
 		case <-mobileTimer.C:
-			if err := SetThreshold(m.mobile); err != nil {
+			if err := threshold.SetThreshold(m.mobile); err != nil {
 				return err
 			}
 			fmt.Printf("enabled mode: mobile (%s)\n", m.mobile)

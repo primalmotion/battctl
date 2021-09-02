@@ -1,4 +1,4 @@
-package main
+package threshold
 
 import (
 	"fmt"
@@ -13,12 +13,12 @@ const (
 )
 
 type Threshold struct {
-	Start  int
-	endEnd int
+	Start int
+	End   int
 }
 
 func (t Threshold) String() string {
-	return fmt.Sprintf("start:%d end:%d", t.Start, t.endEnd)
+	return fmt.Sprintf("start:%d end:%d", t.Start, t.End)
 }
 
 func GetThreshold() (Threshold, error) {
@@ -33,7 +33,7 @@ func GetThreshold() (Threshold, error) {
 		return out, fmt.Errorf("unable to read start threshold file: %w", err)
 	}
 
-	out.endEnd, err = readThreshold(chargeControlEndThresoldPath)
+	out.End, err = readThreshold(chargeControlEndThresoldPath)
 	if err != nil {
 		return out, fmt.Errorf("unable to write end file: %w", err)
 	}
@@ -47,7 +47,7 @@ func SetThreshold(th Threshold) error {
 		return fmt.Errorf("unable to write start file: %w", err)
 	}
 
-	if err := writeThreshold(chargeControlEndThresoldPath, th.endEnd); err != nil {
+	if err := writeThreshold(chargeControlEndThresoldPath, th.End); err != nil {
 		return fmt.Errorf("unable to write end file: %w", err)
 	}
 

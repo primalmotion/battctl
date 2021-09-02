@@ -9,6 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/primalmotion/battctl/internal/monitor"
+	"github.com/primalmotion/battctl/internal/threshold"
+	"github.com/primalmotion/battctl/internal/timerecord"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -33,7 +36,7 @@ func main() {
 			return viper.BindPFlags(cmd.Flags())
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			th, err := GetThreshold()
+			th, err := threshold.GetThreshold()
 			if err != nil {
 				return err
 			}
@@ -59,7 +62,7 @@ func main() {
 				return err
 			}
 
-			return SetThreshold(Threshold{Start: start, endEnd: end})
+			return threshold.SetThreshold(threshold.Threshold{Start: start, End: end})
 		},
 	}
 
@@ -94,17 +97,17 @@ func main() {
 			fmt.Printf("docked: delay=%s start=%d end=%d\n", dockedDelay, dockedStart, dockedEnd)
 			fmt.Printf("mobile: delay=%s start=%d end=%d\n", mobileDelay, mobileStart, mobileEnd)
 
-			return NewMonitor(
-				NewTimeRecorder(path.Join(dataDir, "battdata")),
+			return monitor.NewMonitor(
+				timerecord.New(path.Join(dataDir, "battdata")),
 				dockedDelay,
-				Threshold{
-					Start:  dockedStart,
-					endEnd: dockedEnd,
+				threshold.Threshold{
+					Start: dockedStart,
+					End:   dockedEnd,
 				},
 				mobileDelay,
-				Threshold{
-					Start:  mobileStart,
-					endEnd: mobileEnd,
+				threshold.Threshold{
+					Start: mobileStart,
+					End:   mobileEnd,
 				},
 			).Run(context.Background())
 		},
