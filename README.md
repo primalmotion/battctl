@@ -6,6 +6,17 @@ battctl is a tool that allows:
 - setting the current charge threshold values
 - monitor AC status through udev to apply one the the 2 charging profiles
 
+The thresholds for both profiles (mobile or docked) can be individually 
+configured. Each profile comes with a delay, that allows to define how 
+long to wait before switching after the AC event.
+
+For instance, if the docked delay is 24h and the mobile delay is 30m, this
+means that 24h hours after docking, the thresholds will be updated to their
+docked values. If you unplug the AC for less than 30m, the thresholds will 
+stay at their docked values. After 30 minutes, the thresholds will be 
+restored to their mobile value. If you plug the AC back, it will take 
+24h again to switch to the docked values.
+
 > This require your battery thresolds to be exposed in user-space.
 > This progam assumes you have following paths accessible:
 > 
