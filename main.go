@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path"
 	"strconv"
@@ -22,15 +24,24 @@ func main() {
 		viper.SetEnvPrefix("battctl")
 		viper.AutomaticEnv()
 		viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+		viper.SetConfigName("conf")
+		viper.AddConfigPath("/etc/battctl")
+		viper.AddConfigPath("$home/.config/battclt")
+		if err := viper.ReadInConfig(); err != nil {
+			if !errors.As(err, &viper.ConfigFileNotFoundError{}) {
+				log.Fatal("unable to read config: ", err)
+			}
+		}
 	})
 
 	var rootCmd = &cobra.Command{
-		Use: "batthctl",
+		Use:          "batthctl",
+		SilenceUsage: true,
 	}
 
 	var cmdGet = &cobra.Command{
 		Use:   "get",
-		Short: "get the current charge thresholds.",
+		Short: "Get the current charge thresholds.",
 		Args:  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			return viper.BindPFlags(cmd.Flags())
@@ -46,8 +57,8 @@ func main() {
 	}
 
 	var cmdSet = &cobra.Command{
-		Use:   "set",
-		Short: "Sets the threshold values",
+		Use:   "set <start:int> <end:int>",
+		Short: "Sets the start and end threshold values",
 		Args:  cobra.ExactArgs(2),
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			return viper.BindPFlags(cmd.Flags())
@@ -93,9 +104,9 @@ func main() {
 				return err
 			}
 
-			fmt.Println("starting monitor")
-			fmt.Printf("docked: delay=%s start=%d end=%d\n", dockedDelay, dockedStart, dockedEnd)
-			fmt.Printf("mobile: delay=%s start=%d end=%d\n", mobileDelay, mobileStart, mobileEnd)
+			fmt.Printf("conf: data-dir=%s data-clean=%t\n", dataDir, dataClean)
+			fmt.Printf("conf: docked: delay=%s start=%d end=%d\n", dockedDelay, dockedStart, dockedEnd)
+			fmt.Printf("conf: mobile: delay=%s start=%d end=%d\n", mobileDelay, mobileStart, mobileEnd)
 
 			return monitor.NewMonitor(
 				timerecord.New(path.Join(dataDir, "battdata")),
