@@ -123,14 +123,14 @@ func main() {
 			).Run(context.Background())
 		},
 	}
-	cmdMonitor.Flags().DurationP("docked-delay", "d", 24*time.Hour, "how long to wait to set docked mode after power supply is plugged")
-	cmdMonitor.Flags().IntP("docked-start", "s", 90, "value for charge control threshold start on AC")
-	cmdMonitor.Flags().IntP("docked-end", "e", 95, "value for charge control threshold end on AC")
-	cmdMonitor.Flags().DurationP("mobile-delay", "D", 1*time.Minute, "how long to wait to set mobile mode after power supply is unplugged")
-	cmdMonitor.Flags().IntP("mobile-start", "S", 91, "value for charge control threshold start on battery")
-	cmdMonitor.Flags().IntP("mobile-end", "E", 96, "value for charge control threshold end on battery")
-	cmdMonitor.Flags().String("data-dir", "/var/lib/battctl", "path to a file to kee track of timings")
-	cmdMonitor.Flags().Bool("data-clean", false, "delete time record file before starting")
+	cmdMonitor.Flags().DurationP("docked-delay", "d", 24*time.Hour, "How long to wait before setting docked mode after power supply is plugged")
+	cmdMonitor.Flags().IntP("docked-start", "s", 40, "Value for charge control threshold start in docked mode")
+	cmdMonitor.Flags().IntP("docked-end", "e", 95, "Value for charge control threshold end in docked mode")
+	cmdMonitor.Flags().DurationP("mobile-delay", "D", 1*time.Minute, "How long to wait before setting mobile mode after power supply is unplugged")
+	cmdMonitor.Flags().IntP("mobile-start", "S", 90, "Value for charge control threshold start on battery")
+	cmdMonitor.Flags().IntP("mobile-end", "E", 95, "Value for charge control threshold end on mobile")
+	cmdMonitor.Flags().String("data-dir", "/var/lib/battctl", "Path to data folder.")
+	cmdMonitor.Flags().Bool("data-clean", false, "Delete content of data folder before starting.")
 
 	rootCmd.AddCommand(
 		cmdGet,
