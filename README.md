@@ -6,6 +6,15 @@ battctl is a tool that allows:
 - setting the current charge threshold values
 - monitor AC status through udev to apply one the the 2 charging profiles
 
+> This require your battery thresolds to be exposed in user-space.
+> This progam assumes you have following paths accessible:
+> 
+> - /sys/class/power_supply/BAT0/charge_control_end_threshold
+> - /sys/class/power_supply/BAT0/charge_control_end_threshold
+> 
+> This has only be tested on a Purism Librem 14. For anything else
+> patches welcome!
+
 ## Getting / Setting
 
 To get the current values:
