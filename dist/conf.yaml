@@ -1,0 +1,33 @@
+# battctl conf file
+
+# this files contains the battctl monitor configuration.
+# you can change the delay, charging start and end for
+# both mobile (AC unplugged) and docked (AC plugged) modes.
+# the delay represents how long to wait before going into
+# either mode. Start and end controls at which battery percentage
+# the EC should start or stop the charging cycle.
+#
+# For example if start is 90 and end is 95, the laptop will start
+# charging when battery level is < 90% and will stop charging when
+# it reaches > 95%.
+
+# how long to wait before switching to docked mode
+# when AC is connected.
+docked-delay: 24h
+
+# value for the charge start threshold in docked mode.
+docked-start: 40
+
+# value for the charge end threshold in docked mode.
+docked-end: 95
+
+# how long to wait before switching to mobile mode
+# when AC is disconnected.
+mobile-delay: 30m
+
+# value for the charge start threshold in monitor mode.
+mobile-start: 90
+
+# value for the charge end threshold in monitor mode.
+mobile-end: 95
+

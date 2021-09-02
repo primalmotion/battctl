@@ -1,0 +1,10 @@
+[Unit]
+Description=Battery charge controler daemon
+
+[Service]
+ExecStart=/usr/bin/battctl monitor
+Restart=always
+RestartSec=2s
+
+[Install]
+WantedBy=default.target
