@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -35,7 +37,6 @@ func main() {
 			if err != nil {
 				return err
 			}
-
 			fmt.Println(th)
 			return nil
 		},
@@ -77,23 +78,24 @@ func main() {
 			mobileDelay := viper.GetDuration("mobile-delay")
 			mobileStart := viper.GetInt("mobile-start")
 			mobileEnd := viper.GetInt("mobile-end")
+			dataDir := viper.GetString("data-dir")
+			dataClean := viper.GetBool("data-clean")
 
-			recordPath := viper.GetString("time-record-path")
+			if dataClean {
+				if err := os.RemoveAll(dataDir); err != nil {
+					return err
+				}
+			}
+			if err := os.MkdirAll(dataDir, 0700); err != nil {
+				return err
+			}
 
 			fmt.Println("starting monitor")
 			fmt.Printf("docked: delay=%s start=%d end=%d\n", dockedDelay, dockedStart, dockedEnd)
 			fmt.Printf("mobile: delay=%s start=%d end=%d\n", mobileDelay, mobileStart, mobileEnd)
 
-			tr := NewTimeRecorder(recordPath)
-
-			if viper.GetBool("time-record-clean") {
-				if err := tr.Delete(); err != nil {
-					return err
-				}
-			}
-
 			return NewMonitor(
-				tr,
+				NewTimeRecorder(path.Join(dataDir, "battdata")),
 				dockedDelay,
 				Threshold{
 					Start:  dockedStart,
@@ -113,8 +115,8 @@ func main() {
 	cmdMonitor.Flags().DurationP("mobile-delay", "D", 1*time.Minute, "how long to wait to set mobile mode after power supply is unplugged")
 	cmdMonitor.Flags().IntP("mobile-start", "S", 91, "value for charge control threshold start on battery")
 	cmdMonitor.Flags().IntP("mobile-end", "E", 96, "value for charge control threshold end on battery")
-	cmdMonitor.Flags().String("time-record-path", "/tmp/battctl", "path to a file to kee track of timings")
-	cmdMonitor.Flags().Bool("time-record-clean", false, "delete time record file before starting")
+	cmdMonitor.Flags().String("data-dir", "/var/lib/battctl", "path to a file to kee track of timings")
+	cmdMonitor.Flags().Bool("data-clean", false, "delete time record file before starting")
 
 	rootCmd.AddCommand(
 		cmdGet,

@@ -29,7 +29,7 @@ func (t *TimeRecord) Record(mode string) error {
 	return os.WriteFile(
 		t.path,
 		[]byte(fmt.Sprintf("%s:%d", mode, time.Now().Unix())),
-		644,
+		0600,
 	)
 }
 

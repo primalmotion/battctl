@@ -1,4 +1,4 @@
-module github.com/primalmotion/batthresoldctl
+module github.com/primalmotion/battctl
 
 go 1.17
 

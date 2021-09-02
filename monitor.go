@@ -110,12 +110,14 @@ func (m *Monitor) Run(ctx context.Context) error {
 		}
 
 	case TimeRecordModeUnset:
-		if !acOnline {
-			mobileTimer.Reset(0)
-			fmt.Println("restoring: unset state, setting mobile now")
-		} else {
+		if acOnline {
 			dockedTimer.Reset(0)
+			m.tr.Record("docked")
 			fmt.Println("restoring: unset state, setting docked now")
+		} else {
+			mobileTimer.Reset(0)
+			m.tr.Record("mobile")
+			fmt.Println("restoring: unset state, setting mobile now")
 		}
 	}
 
