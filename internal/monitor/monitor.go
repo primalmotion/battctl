@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/pilebones/go-udev/netlink"
+	"github.com/primalmotion/battctl/internal/state"
 	"github.com/primalmotion/battctl/internal/threshold"
-	"github.com/primalmotion/battctl/internal/timerecord"
 )
 
 const (
@@ -35,17 +35,17 @@ var matcher = &netlink.RuleDefinitions{
 }
 
 type Monitor struct {
-	tr          *timerecord.TimeRecord
+	st          *state.State
 	dockedDelay time.Duration
 	docked      threshold.Threshold
 	mobileDelay time.Duration
 	mobile      threshold.Threshold
 }
 
-func NewMonitor(tr *timerecord.TimeRecord, dockedDelay time.Duration, docked threshold.Threshold, mobileDelay time.Duration, mobile threshold.Threshold) *Monitor {
+func NewMonitor(tr *state.State, dockedDelay time.Duration, docked threshold.Threshold, mobileDelay time.Duration, mobile threshold.Threshold) *Monitor {
 
 	return &Monitor{
-		tr:          tr,
+		st:          tr,
 		dockedDelay: dockedDelay,
 		docked:      docked,
 		mobileDelay: mobileDelay,
@@ -82,34 +82,34 @@ func (m *Monitor) Run(ctx context.Context) error {
 
 		case <-evts:
 
-			wmode, delay, err := m.getWanted()
+			wmode, wdelay, err := m.getWanted()
 			if err != nil {
 				return err
 			}
 
-			if wmode == m.tr.GetMode() {
-				if err := m.tr.SetMode(wmode); err != nil {
+			if wmode == m.st.GetMode() {
+				if err := m.st.SetMode(wmode); err != nil {
 					return err
 				}
 				timer.Stop()
 				continue
 			}
 
-			if sremaining := m.tr.GetScheduleForMode(wmode); sremaining != 0 {
-				delay = sremaining
+			if sremaining := m.st.GetScheduleForMode(wmode); sremaining != 0 {
+				wdelay = sremaining
 			}
 
-			if err := m.tr.SetScheduledMode(wmode, delay); err != nil {
+			if err := m.st.SetScheduledMode(wmode, wdelay); err != nil {
 				return err
 			}
 
-			timer.Reset(delay)
+			timer.Reset(wdelay)
 
-			fmt.Printf("scheduled: mode %s in %s\n", wmode, delay)
+			fmt.Printf("scheduled: mode %s in %s\n", wmode, wdelay)
 
 		case <-timer.C:
 
-			wmode := m.tr.GetScheduledMode()
+			wmode := m.st.GetScheduledMode()
 
 			var th threshold.Threshold
 			if wmode == "docked" {
@@ -118,7 +118,7 @@ func (m *Monitor) Run(ctx context.Context) error {
 				th = m.mobile
 			}
 
-			if err := m.tr.SetMode(wmode); err != nil {
+			if err := m.st.SetMode(wmode); err != nil {
 				return err
 			}
 
@@ -126,7 +126,7 @@ func (m *Monitor) Run(ctx context.Context) error {
 				return err
 			}
 
-			fmt.Printf("enabled mode: %s (%s)\n", wmode, th)
+			fmt.Printf("mode: %s (%s)\n", wmode, th)
 
 		case err := <-errs:
 			close(quit)
@@ -144,8 +144,8 @@ func (m *Monitor) recover(timer *time.Timer) error {
 	resetTimer := false
 	remaining := time.Duration(0)
 
-	mode := m.tr.GetMode()
-	smode := m.tr.GetScheduledMode()
+	mode := m.st.GetMode()
+	smode := m.st.GetScheduledMode()
 	wmode, _, err := m.getWanted()
 	if err != nil {
 		return err
@@ -154,7 +154,7 @@ func (m *Monitor) recover(timer *time.Timer) error {
 	if mode == "" {
 		resetTimer = true
 		mode = wmode
-		if err := m.tr.SetScheduledMode(mode, 0); err != nil {
+		if err := m.st.SetScheduledMode(mode, 0); err != nil {
 			return err
 		}
 		fmt.Println("restoring: mode initialized to", mode)
@@ -163,7 +163,7 @@ func (m *Monitor) recover(timer *time.Timer) error {
 	if wmode != mode && wmode != smode {
 		resetTimer = true
 		smode = "mobile"
-		if err := m.tr.SetScheduledMode(smode, 0); err != nil {
+		if err := m.st.SetScheduledMode(smode, 0); err != nil {
 			return err
 		}
 		fmt.Println("restoring: untracked changed. reinitialized to mobile")
@@ -171,7 +171,7 @@ func (m *Monitor) recover(timer *time.Timer) error {
 
 	if smode != "" {
 		resetTimer = true
-		remaining = m.tr.GetScheduleForMode(smode)
+		remaining = m.st.GetScheduleForMode(smode)
 		fmt.Printf("restoring: scheduled mode %s in %s\n", smode, remaining)
 	}
 

@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/primalmotion/battctl/internal/monitor"
+	"github.com/primalmotion/battctl/internal/state"
 	"github.com/primalmotion/battctl/internal/threshold"
-	"github.com/primalmotion/battctl/internal/timerecord"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -108,13 +108,13 @@ func main() {
 			fmt.Printf("conf: docked: delay=%s start=%d end=%d\n", dockedDelay, dockedStart, dockedEnd)
 			fmt.Printf("conf: mobile: delay=%s start=%d end=%d\n", mobileDelay, mobileStart, mobileEnd)
 
-			tr := timerecord.New(path.Join(dataDir, "state"))
-			if err := tr.Load(); err != nil {
+			st := state.New(path.Join(dataDir, "state"))
+			if err := st.Load(); err != nil {
 				return err
 			}
 
 			return monitor.NewMonitor(
-				tr,
+				st,
 				dockedDelay,
 				threshold.Threshold{
 					Start: dockedStart,
