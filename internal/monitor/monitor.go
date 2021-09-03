@@ -55,7 +55,7 @@ func NewMonitor(tr *timerecord.TimeRecord, dockedDelay time.Duration, docked thr
 
 func (m *Monitor) Run(ctx context.Context) error {
 
-	// Connect to udev`
+	// Connect to udev
 	conn := &netlink.UEventConn{}
 	if err := conn.Connect(netlink.UdevEvent); err != nil {
 		return fmt.Errorf("unable to connect to netlink kobject uevent socket: %w", err)
@@ -67,60 +67,12 @@ func (m *Monitor) Run(ctx context.Context) error {
 	quit := conn.Monitor(evts, errs, matcher)
 
 	// Prepare timers
-	dockedTimer := time.NewTimer(0)
-	<-dockedTimer.C
-	mobileTimer := time.NewTimer(0)
-	<-mobileTimer.C
+	timer := time.NewTimer(0)
+	<-timer.C
 
-	// Verify current state
-	acOnline, err := isACOnline()
-	if err != nil {
+	// Recover state
+	if err := m.recover(timer); err != nil {
 		return err
-	}
-
-	sr, err := m.tr.Since()
-	if err != nil {
-		return fmt.Errorf("restoring: unable to get record.since: %w", err)
-	}
-
-	switch m.tr.GetMode() {
-
-	case "mobile":
-		if acOnline {
-			dockedTimer.Reset(m.dockedDelay)
-			fmt.Println("restoring: ac=online mode=mobile: untracked switch. scheduling docked in", m.dockedDelay)
-		} else {
-			remaining := m.mobileDelay - sr
-			if remaining < 0 {
-				remaining = 0
-			}
-			mobileTimer.Reset(remaining)
-			fmt.Println("restoring: ac=offline mode=mobile: scheduling mobile in", remaining)
-		}
-
-	case "docked":
-		if !acOnline {
-			mobileTimer.Reset(m.mobileDelay)
-			fmt.Println("restoring: ac=offline mode=docked: untracked switch. scheduling mobile in", m.mobileDelay)
-		} else {
-			remaining := m.dockedDelay - sr
-			if remaining < 0 {
-				remaining = 0
-			}
-			dockedTimer.Reset(remaining)
-			fmt.Println("restoring: ac=online mode=docked: scheduling docked in", remaining)
-		}
-
-	case timerecord.TimeRecordModeUnset:
-		if acOnline {
-			dockedTimer.Reset(0)
-			m.tr.Record("docked")
-			fmt.Println("restoring: unset state, setting docked now")
-		} else {
-			mobileTimer.Reset(0)
-			m.tr.Record("mobile")
-			fmt.Println("restoring: unset state, setting mobile now")
-		}
 	}
 
 	// Main loop
@@ -128,36 +80,53 @@ func (m *Monitor) Run(ctx context.Context) error {
 
 		select {
 
-		case evt := <-evts:
-			switch evt.Env[udevEnvPowerSupplyOnline] {
-			case "0":
-				if !m.tr.IsMode("mobile") {
-					dockedTimer.Stop()
-					mobileTimer.Reset(m.mobileDelay)
-					m.tr.Record("mobile")
-					fmt.Println("scheduled: mode mobile in", m.mobileDelay)
-				}
+		case <-evts:
 
-			case "1":
-				if !m.tr.IsMode("docked") {
-					mobileTimer.Stop()
-					dockedTimer.Reset(m.dockedDelay)
-					m.tr.Record("docked")
-					fmt.Println("scheduled: mode docked in", m.dockedDelay)
-				}
-			}
-
-		case <-dockedTimer.C:
-			if err := threshold.SetThreshold(m.docked); err != nil {
+			wmode, delay, err := m.getWanted()
+			if err != nil {
 				return err
 			}
-			fmt.Printf("enabled mode: docked (%s)\n", m.docked)
 
-		case <-mobileTimer.C:
-			if err := threshold.SetThreshold(m.mobile); err != nil {
+			if wmode == m.tr.GetMode() {
+				if err := m.tr.SetMode(wmode); err != nil {
+					return err
+				}
+				timer.Stop()
+				continue
+			}
+
+			if sremaining := m.tr.GetScheduleForMode(wmode); sremaining != 0 {
+				delay = sremaining
+			}
+
+			if err := m.tr.SetScheduledMode(wmode, delay); err != nil {
 				return err
 			}
-			fmt.Printf("enabled mode: mobile (%s)\n", m.mobile)
+
+			timer.Reset(delay)
+
+			fmt.Printf("scheduled: mode %s in %s\n", wmode, delay)
+
+		case <-timer.C:
+
+			wmode := m.tr.GetScheduledMode()
+
+			var th threshold.Threshold
+			if wmode == "docked" {
+				th = m.docked
+			} else {
+				th = m.mobile
+			}
+
+			if err := m.tr.SetMode(wmode); err != nil {
+				return err
+			}
+
+			if err := threshold.SetThreshold(th); err != nil {
+				return err
+			}
+
+			fmt.Printf("enabled mode: %s (%s)\n", wmode, th)
 
 		case err := <-errs:
 			close(quit)
@@ -168,6 +137,65 @@ func (m *Monitor) Run(ctx context.Context) error {
 			return ctx.Err()
 		}
 	}
+}
+
+func (m *Monitor) recover(timer *time.Timer) error {
+
+	resetTimer := false
+	remaining := time.Duration(0)
+
+	mode := m.tr.GetMode()
+	smode := m.tr.GetScheduledMode()
+	wmode, _, err := m.getWanted()
+	if err != nil {
+		return err
+	}
+
+	if mode == "" {
+		resetTimer = true
+		mode = wmode
+		if err := m.tr.SetScheduledMode(mode, 0); err != nil {
+			return err
+		}
+		fmt.Println("restoring: mode initialized to", mode)
+	}
+
+	if wmode != mode && wmode != smode {
+		resetTimer = true
+		smode = "mobile"
+		if err := m.tr.SetScheduledMode(smode, 0); err != nil {
+			return err
+		}
+		fmt.Println("restoring: untracked changed. reinitialized to mobile")
+	}
+
+	if smode != "" {
+		resetTimer = true
+		remaining = m.tr.GetScheduleForMode(smode)
+		fmt.Printf("restoring: scheduled mode %s in %s\n", smode, remaining)
+	}
+
+	if resetTimer {
+		timer.Reset(remaining)
+		fmt.Printf("restoring: firing restoration timer for %s in %s\n", mode, remaining)
+	}
+
+	fmt.Printf("restoring: state restoration complete: mode=%s smode=%s\n", mode, smode)
+	return nil
+}
+
+func (m *Monitor) getWanted() (wmode string, delay time.Duration, err error) {
+
+	online, err := isACOnline()
+	if err != nil {
+		return "", 0, err
+	}
+
+	if online {
+		return "docked", m.dockedDelay, nil
+	}
+
+	return "mobile", m.mobileDelay, nil
 }
 
 func isACOnline() (bool, error) {

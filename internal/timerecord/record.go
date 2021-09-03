@@ -1,72 +1,77 @@
 package timerecord
 
 import (
-	"bytes"
-	"fmt"
+	"encoding/json"
 	"os"
-	"strconv"
 	"time"
 )
 
-const TimeRecordModeUnset = "-"
-
 type TimeRecord struct {
+	Mode          string    `json:"mode"`
+	ScheduledMode string    `json:"scheduledMode"`
+	ScheduledTime time.Time `json:"scheduledTime"`
+
 	path string
-	mode string
 }
 
 func New(path string) *TimeRecord {
 	return &TimeRecord{
 		path: path,
-		mode: TimeRecordModeUnset,
 	}
 }
 
-func (t *TimeRecord) Record(mode string) error {
-
-	t.mode = mode
-
-	return os.WriteFile(
-		t.path,
-		[]byte(fmt.Sprintf("%s:%d", mode, time.Now().Unix())),
-		0600,
-	)
-}
-
-func (t *TimeRecord) GetMode() string {
-	return t.mode
-}
-
-func (t *TimeRecord) IsMode(mode string) bool {
-	return t.mode == mode
-}
-
-func (t *TimeRecord) Delete() error {
-	err := os.Remove(t.path)
-	if os.IsNotExist(err) {
-		return nil
-	}
-	return err
-}
-
-func (t *TimeRecord) Since() (time.Duration, error) {
-
+func (t *TimeRecord) Load() error {
 	data, err := os.ReadFile(t.path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return 0, nil
+			return nil
 		}
-		return 0, err
+		return err
 	}
+	return json.Unmarshal(data, t)
+}
 
-	parts := bytes.SplitN(data, []byte{':'}, 2)
-
-	d, err := strconv.Atoi(string(parts[1]))
+func (t *TimeRecord) Save() error {
+	data, err := json.MarshalIndent(t, "", "  ")
 	if err != nil {
-		return 0, fmt.Errorf("unable to convert recorded time: %w", err)
+		return err
+	}
+	return os.WriteFile(t.path, data, 0600)
+}
+
+func (t *TimeRecord) GetMode() string {
+	return t.Mode
+}
+
+func (t *TimeRecord) SetMode(mode string) error {
+
+	t.Mode = mode
+
+	t.ScheduledMode = ""
+	t.ScheduledTime = time.Time{}
+
+	return t.Save()
+}
+
+func (t *TimeRecord) GetScheduledMode() (mode string) {
+	return t.ScheduledMode
+}
+
+func (t *TimeRecord) SetScheduledMode(mode string, in time.Duration) error {
+
+	t.ScheduledMode = mode
+	t.ScheduledTime = time.Now().Add(in)
+
+	return t.Save()
+}
+
+func (t *TimeRecord) GetScheduleForMode(mode string) (remaining time.Duration) {
+
+	remaining = time.Until(t.ScheduledTime)
+
+	if remaining < 0 {
+		remaining = 0
 	}
 
-	t.mode = string(parts[0])
-
-	return time.Since(time.Unix(int64(d), 0)), nil
+	return remaining
 }

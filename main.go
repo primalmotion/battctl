@@ -108,8 +108,13 @@ func main() {
 			fmt.Printf("conf: docked: delay=%s start=%d end=%d\n", dockedDelay, dockedStart, dockedEnd)
 			fmt.Printf("conf: mobile: delay=%s start=%d end=%d\n", mobileDelay, mobileStart, mobileEnd)
 
+			tr := timerecord.New(path.Join(dataDir, "state"))
+			if err := tr.Load(); err != nil {
+				return err
+			}
+
 			return monitor.NewMonitor(
-				timerecord.New(path.Join(dataDir, "battdata")),
+				tr,
 				dockedDelay,
 				threshold.Threshold{
 					Start: dockedStart,
