@@ -7,9 +7,9 @@ import (
 	"strings"
 )
 
-const (
-	chargeControlStartThresoldPath = "/sys/class/power_supply/BAT0/charge_control_start_threshold"
-	chargeControlEndThresoldPath   = "/sys/class/power_supply/BAT0/charge_control_end_threshold"
+var (
+	ChargeControlStartThresholdPath = "/sys/class/power_supply/BAT0/charge_control_start_threshold"
+	ChargeControlEndThresholdPath   = "/sys/class/power_supply/BAT0/charge_control_end_threshold"
 )
 
 type Threshold struct {
@@ -28,12 +28,12 @@ func GetThreshold() (Threshold, error) {
 		err error
 	)
 
-	out.Start, err = readThreshold(chargeControlStartThresoldPath)
+	out.Start, err = readThreshold(ChargeControlStartThresholdPath)
 	if err != nil {
 		return out, fmt.Errorf("unable to read start threshold file: %w", err)
 	}
 
-	out.End, err = readThreshold(chargeControlEndThresoldPath)
+	out.End, err = readThreshold(ChargeControlEndThresholdPath)
 	if err != nil {
 		return out, fmt.Errorf("unable to write end file: %w", err)
 	}
@@ -43,11 +43,11 @@ func GetThreshold() (Threshold, error) {
 
 func SetThreshold(th Threshold) error {
 
-	if err := writeThreshold(chargeControlStartThresoldPath, th.Start); err != nil {
+	if err := writeThreshold(ChargeControlStartThresholdPath, th.Start); err != nil {
 		return fmt.Errorf("unable to write start file: %w", err)
 	}
 
-	if err := writeThreshold(chargeControlEndThresoldPath, th.End); err != nil {
+	if err := writeThreshold(ChargeControlEndThresholdPath, th.End); err != nil {
 		return fmt.Errorf("unable to write end file: %w", err)
 	}
 

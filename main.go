@@ -35,7 +35,7 @@ func main() {
 	})
 
 	var rootCmd = &cobra.Command{
-		Use:          "batthctl",
+		Use:          "battctl",
 		SilenceUsage: true,
 	}
 
@@ -85,6 +85,15 @@ func main() {
 			return viper.BindPFlags(cmd.Flags())
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+
+			threshold.ChargeControlStartThresholdPath = viper.GetString("threshold-start-path")
+			if _, err := os.Stat(threshold.ChargeControlStartThresholdPath); err != nil {
+				return fmt.Errorf("thresold start file: %w", err)
+			}
+			threshold.ChargeControlEndThresholdPath = viper.GetString("threshold-end-path")
+			if _, err := os.Stat(threshold.ChargeControlEndThresholdPath); err != nil {
+				return fmt.Errorf("thresold end file: %w", err)
+			}
 
 			dockedDelay := viper.GetDuration("docked-delay")
 			dockedStart := viper.GetInt("docked-start")
@@ -136,6 +145,8 @@ func main() {
 	cmdMonitor.Flags().IntP("mobile-end", "E", 95, "Value for charge control threshold end on mobile")
 	cmdMonitor.Flags().String("data-dir", "/var/lib/battctl", "Path to data folder.")
 	cmdMonitor.Flags().Bool("data-clean", false, "Delete content of data folder before starting.")
+	cmdMonitor.Flags().String("threshold-start-path", "/sys/class/power_supply/BAT0/charge_control_start_threshold", "Path to the charge control start file")
+	cmdMonitor.Flags().String("threshold-end-path", "/sys/class/power_supply/BAT0/charge_control_end_threshold", "Path to the charge control end file")
 
 	rootCmd.AddCommand(
 		cmdGet,

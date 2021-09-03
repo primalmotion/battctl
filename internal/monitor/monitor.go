@@ -62,16 +62,17 @@ func (m *Monitor) Run(ctx context.Context) error {
 	}
 	defer conn.Close()
 
-	evts := make(chan netlink.UEvent)
+	evts := make(chan netlink.UEvent, 2)
 	errs := make(chan error)
 	quit := conn.Monitor(evts, errs, matcher)
 
 	// Prepare timers
 	timer := time.NewTimer(0)
 	<-timer.C
+	ticker := time.NewTicker(10 * time.Minute)
 
 	// Recover state
-	if err := m.recover(timer); err != nil {
+	if err := m.sync(timer); err != nil {
 		return err
 	}
 
@@ -80,10 +81,19 @@ func (m *Monitor) Run(ctx context.Context) error {
 
 		select {
 
+		case <-ticker.C:
+			if err := m.sync(timer); err != nil {
+				return err
+			}
+
 		case <-evts:
 
 			wmode, wdelay, err := m.getWanted()
 			if err != nil {
+				return err
+			}
+
+			if err := m.st.Load(); err != nil {
 				return err
 			}
 
@@ -108,6 +118,10 @@ func (m *Monitor) Run(ctx context.Context) error {
 			fmt.Printf("scheduled: mode %s in %s\n", wmode, wdelay)
 
 		case <-timer.C:
+
+			if err := m.st.Load(); err != nil {
+				return err
+			}
 
 			wmode := m.st.GetScheduledMode()
 
@@ -139,7 +153,11 @@ func (m *Monitor) Run(ctx context.Context) error {
 	}
 }
 
-func (m *Monitor) recover(timer *time.Timer) error {
+func (m *Monitor) sync(timer *time.Timer) error {
+
+	if err := m.st.Load(); err != nil {
+		return err
+	}
 
 	resetTimer := false
 	remaining := time.Duration(0)
@@ -157,30 +175,30 @@ func (m *Monitor) recover(timer *time.Timer) error {
 		if err := m.st.SetScheduledMode(mode, 0); err != nil {
 			return err
 		}
-		fmt.Println("restoring: mode initialized to", mode)
+		fmt.Println("sync: no state. mode initialized to", mode)
 	}
 
 	if wmode != mode && wmode != smode {
 		resetTimer = true
-		smode = "mobile"
+		smode = wmode
 		if err := m.st.SetScheduledMode(smode, 0); err != nil {
 			return err
 		}
-		fmt.Println("restoring: untracked changed. reinitialized to mobile")
+		fmt.Println("sync: untracked changed. reinitialized to", wmode)
 	}
 
 	if smode != "" {
 		resetTimer = true
 		remaining = m.st.GetScheduleForMode(smode)
-		fmt.Printf("restoring: scheduled mode %s in %s\n", smode, remaining)
+		fmt.Printf("sync: scheduled mode %s in %s\n", smode, remaining)
 	}
 
 	if resetTimer {
 		timer.Reset(remaining)
-		fmt.Printf("restoring: firing restoration timer for %s in %s\n", mode, remaining)
 	}
 
-	fmt.Printf("restoring: state restoration complete: mode=%s smode=%s\n", mode, smode)
+	fmt.Printf("sync: state sync complete: mode=%s smode=%s\n", mode, smode)
+
 	return nil
 }
 
