@@ -40,9 +40,13 @@ type Monitor struct {
 	docked      threshold.Threshold
 	mobileDelay time.Duration
 	mobile      threshold.Threshold
+	timer       *time.Timer
 }
 
 func NewMonitor(tr *state.State, dockedDelay time.Duration, docked threshold.Threshold, mobileDelay time.Duration, mobile threshold.Threshold) *Monitor {
+
+	timer := time.NewTimer(0)
+	<-timer.C
 
 	return &Monitor{
 		st:          tr,
@@ -50,6 +54,7 @@ func NewMonitor(tr *state.State, dockedDelay time.Duration, docked threshold.Thr
 		docked:      docked,
 		mobileDelay: mobileDelay,
 		mobile:      mobile,
+		timer:       timer,
 	}
 }
 
@@ -62,17 +67,17 @@ func (m *Monitor) Run(ctx context.Context) error {
 	}
 	defer conn.Close()
 
-	evts := make(chan netlink.UEvent, 2)
+	evts := make(chan netlink.UEvent)
 	errs := make(chan error)
 	quit := conn.Monitor(evts, errs, matcher)
 
-	// Prepare timers
-	timer := time.NewTimer(0)
-	<-timer.C
-	ticker := time.NewTicker(10 * time.Minute)
+	// Prepare time
+	tickerResolution := time.Second
+	ticker := time.NewTicker(tickerResolution)
+	now := time.Now()
 
 	// Recover state
-	if err := m.sync(timer); err != nil {
+	if err := m.sync(m.timer); err != nil {
 		return err
 	}
 
@@ -81,11 +86,6 @@ func (m *Monitor) Run(ctx context.Context) error {
 
 		select {
 
-		case <-ticker.C:
-			if err := m.sync(timer); err != nil {
-				return err
-			}
-
 		case <-evts:
 
 			wmode, wdelay, err := m.getWanted()
@@ -93,35 +93,19 @@ func (m *Monitor) Run(ctx context.Context) error {
 				return err
 			}
 
-			if err := m.st.Load(); err != nil {
-				return err
-			}
-
 			if wmode == m.st.GetMode() {
 				if err := m.st.SetMode(wmode); err != nil {
 					return err
 				}
-				timer.Stop()
+				m.timer.Stop()
 				continue
 			}
 
-			if sremaining := m.st.GetScheduleForMode(wmode); sremaining != 0 {
-				wdelay = sremaining
-			}
-
-			if err := m.st.SetScheduledMode(wmode, wdelay); err != nil {
+			if err := m.refreshSchedule(wmode, wdelay); err != nil {
 				return err
 			}
 
-			timer.Reset(wdelay)
-
-			fmt.Printf("scheduled: mode %s in %s\n", wmode, wdelay)
-
-		case <-timer.C:
-
-			if err := m.st.Load(); err != nil {
-				return err
-			}
+		case <-m.timer.C:
 
 			wmode := m.st.GetScheduledMode()
 
@@ -142,6 +126,20 @@ func (m *Monitor) Run(ctx context.Context) error {
 
 			fmt.Printf("mode: %s (%s)\n", wmode, th)
 
+		case <-ticker.C:
+
+			rnow := now.Add(tickerResolution)
+			now = time.Now()
+			drift := now.Sub(rnow)
+
+			if drift > time.Second && m.st.GetScheduledMode() != "" {
+				fmt.Printf("clock: drift detected (%s) while having a scheduled timer. rescheduling.\n", now.Sub(rnow))
+				smode := m.st.GetScheduledMode()
+				if err := m.refreshSchedule(smode, m.st.GetScheduleForMode(smode)); err != nil {
+					return err
+				}
+			}
+
 		case err := <-errs:
 			close(quit)
 			return err
@@ -153,11 +151,24 @@ func (m *Monitor) Run(ctx context.Context) error {
 	}
 }
 
-func (m *Monitor) sync(timer *time.Timer) error {
+func (m *Monitor) refreshSchedule(wmode string, wdelay time.Duration) error {
 
-	if err := m.st.Load(); err != nil {
+	if sremaining := m.st.GetScheduleForMode(wmode); sremaining != 0 {
+		wdelay = sremaining
+	}
+
+	if err := m.st.SetScheduledMode(wmode, wdelay); err != nil {
 		return err
 	}
+
+	m.timer.Reset(wdelay)
+
+	fmt.Printf("scheduled: mode %s in %s\n", wmode, wdelay)
+
+	return nil
+}
+
+func (m *Monitor) sync(timer *time.Timer) error {
 
 	resetTimer := false
 	remaining := time.Duration(0)
