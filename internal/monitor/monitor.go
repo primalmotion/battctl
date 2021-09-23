@@ -98,6 +98,7 @@ func (m *Monitor) Run(ctx context.Context) error {
 					return err
 				}
 				m.timer.Stop()
+				fmt.Println("unscheduling: already in desired mode:", wmode)
 				continue
 			}
 
